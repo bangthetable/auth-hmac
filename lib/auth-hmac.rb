@@ -365,16 +365,9 @@ class AuthHMAC
         module InstanceMethods # :nodoc:
         end
       end
-      
-      module Connection # :nodoc:
-        def self.included(base)
-          base.send :alias_method_chain, :request, :hmac
-          base.class_eval do
-            attr_accessor :hmac_secret, :hmac_access_id, :use_hmac, :hmac_options
-          end
-        end
 
-        def request_with_hmac(method, path, *arguments)
+      module ConnRequest
+        def request(method, path, *arguments)
           if use_hmac && hmac_access_id && hmac_secret
             arguments.last['Date'] = Time.now.httpdate if arguments.last['Date'].nil?
             temp = "Net::HTTP::#{method.to_s.capitalize}".constantize.new(path, arguments.last)
@@ -382,7 +375,15 @@ class AuthHMAC
             arguments.last['Authorization'] = temp['Authorization']
           end
           
-          request_without_hmac(method, path, *arguments)
+          super(method, path, *arguments)
+        end
+      end
+      
+      module Connection # :nodoc:
+        def self.included(base)
+          base.class_eval do
+            attr_accessor :hmac_secret, :hmac_access_id, :use_hmac, :hmac_options
+          end
         end
       end
             
@@ -397,7 +398,8 @@ class AuthHMAC
       end
       
       if defined?(ActiveResource)
-        ActiveResource::Base.send(:include, BaseHmac)        
+        ActiveResource::Base.send(:include, BaseHmac)
+        ActiveResource::Connection.send(:include, ConnRequest)    
         ActiveResource::Connection.send(:include, Connection)
       end     
     end
